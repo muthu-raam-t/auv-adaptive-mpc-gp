@@ -36,3 +36,4 @@ end
 save(fullfile(results_dir, 'simulation_results.mat'), 'results');
 
 plot_results(results, p);
+generate_comparison_table(results);
