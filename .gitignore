@@ -1,0 +1,16 @@
+# MATLAB
+*.asv
+*.autosave
+*.m~
+slprj/
+sccprj/
+*.slxc
+codegen/
+*.mex*
+
+# Simulation outputs (regenerate with run_simulation.m)
+results/*.mat
+
+# OS
+.DS_Store
+Thumbs.db
