@@ -1,102 +1,83 @@
 # AUV Adaptive MPC with Regularized Dynamic-Forgetting Gaussian Processes
 
-A MATLAB implementation of a learning-based model predictive control (MPC)
-framework for autonomous underwater vehicle (AUV) trajectory tracking under
-unknown, time-varying environmental disturbances such as currents, tether
-drag, and unmodeled hydrodynamic effects.
+## Introduction
 
-## Background
+Autonomous underwater vehicles (AUVs) are increasingly used for tasks like
+subsea pipeline inspection, seabed mapping, and infrastructure survey —
+work that depends on the vehicle holding an accurate position and heading
+even while moving through a hostile, constantly shifting environment.
+Achieving that kind of precision requires a control strategy that can plan
+ahead rather than just react, and can account for the physical limits of
+the vehicle's thrusters as it does so.
 
-Model predictive control is a natural fit for AUV navigation because it
-handles actuator and state constraints directly, but its tracking
-performance is only as good as the underlying vehicle model. In practice,
-AUV models are never exact: added-mass terms, drag coefficients, tether
-dynamics, and current-induced forces all introduce errors that a purely
-model-based controller cannot compensate for.
+## Domain
 
-A common fix is to estimate the *lumped* disturbance — everything the
-model gets wrong, bundled into one term — using a Gaussian Process (GP).
-GPs are attractive here because they are non-parametric and provide a
-variance estimate alongside every prediction, which is useful for
-building safer, more conservative control laws. The catch is that a
-single GP with fixed hyperparameters struggles once the disturbance
-statistics change: a model tuned to slowly varying currents will lag
-behind a sudden squall, and a model tuned for fast transients will be
-noisy during calm periods.
+The underwater domain is particularly unforgiving for model-based control.
+An AUV's behavior is governed by nonlinear hydrodynamics — added mass,
+drag, Coriolis and centripetal coupling between its surge, sway, heave,
+and yaw motions — and on top of that, it is constantly pushed around by
+currents, self-induced flow, thruster wake, and, for tethered vehicles,
+drag from the tether itself. None of this is fully known in advance, and
+much of it changes character over the course of a mission: a current that
+was steady a minute ago can shift direction, strengthen, or turn choppy
+with no warning.
 
-This project follows a *forgetting-factor* approach to that problem:
-instead of one GP, maintain several GPs that each discount older
-training samples at a different rate, and combine their predictions
-based on how well each has performed recently. Models with a forgetting
-factor close to 1 behave like a standard GP and excel at repeating,
-slowly-varying disturbances; models with a lower forgetting factor react
-faster to abrupt changes at the cost of more noise. Weighting them
-online — rather than committing to one forgetting factor offline —
-removes the need to re-tune the estimator every time the operating
-conditions shift.
+## Problem Statement
 
-## What this project adds
+Model predictive control (MPC) is a natural fit for this kind of vehicle:
+it optimizes a sequence of actions over a future horizon while respecting
+actuator and state limits, rather than responding to error moment by
+moment. But an MPC controller is only as good as the model it optimizes
+against, and an AUV's model is never fully accurate. The unmodeled portion
+— currents, tether pull, thrust degradation, wall effects — behaves like
+an external disturbance acting on the vehicle, and if the controller has
+no way to estimate it, tracking accuracy degrades exactly when precision
+matters most.
 
-Two extensions are layered on top of the base dynamic-forgetting scheme:
+A natural fix is to learn that disturbance online using a Gaussian Process
+(GP): GPs are non-parametric, so they don't force a particular structure
+onto the disturbance, and they report an uncertainty alongside every
+prediction. The difficulty is that a single GP with hyperparameters tuned
+once, offline, cannot keep up if the disturbance's behavior changes
+mid-mission — a model tuned for a slow, repeating current lags behind a
+sudden squall, and a model tuned for fast transients is noisy the rest of
+the time. Introducing a forgetting factor that discounts older samples
+helps, but a single fixed value is again only right for one timescale,
+and there is no principled rule for choosing it online.
 
-1. **Regularized weight blending.** A naive linear-programming weight
-   optimization across the candidate GPs is a linear objective over a
-   simplex constraint, which mathematically collapses to picking a
-   single "best" model at each step — a hard switch that can chatter
-   between models when their errors are close. Adding a quadratic
-   regularization term turns the optimization into a small quadratic
-   program and yields a smoother blend across models instead of a hard
-   selection.
+## Solution Provided
 
-2. **Uncertainty-aware constraint tightening.** Rather than feeding only
-   the GP's mean disturbance estimate into the MPC's internal model, the
-   predicted variance is also used to shrink the actuator bounds when the
-   estimator is unsure. This gives the controller some built-in margin
-   during periods of high disturbance uncertainty instead of treating
-   every estimate as equally trustworthy.
+This project implements a learning-based MPC framework for a reduced,
+4-degree-of-freedom AUV model (surge, sway, heave, yaw) that resolves the
+above by maintaining several Gaussian Processes in parallel, each
+discounting past data at a different rate, and blending their disturbance
+predictions online based on which one has been tracking the true
+disturbance best over a recent window. This removes the need to commit to
+a single forgetting factor or to retune anything offline once the mission
+starts.
 
-## Repository layout
+Two extensions are added on top of that base idea:
 
-```
-config.m                 Physical, control, and simulation parameters
-auv_dynamics.m            Nonlinear AUV plant model (surge/sway/heave/yaw)
-rk4_integrate.m           4th-order Runge-Kutta discretization
-disturbance_profile.m     Ground-truth disturbance generator (sim only)
-reference_trajectory.m    Lemniscate reference trajectory generator
-residual_disturbance.m    Back-calculates the measured disturbance for GP training
-ForgettingGP.m             Weighted-GP class, one instance per disturbance axis
-dynamic_weight_qp.m       Online weight blending across forgetting-factor GPs
-nmpc_solve.m               Nonlinear MPC (fmincon), with uncertainty tightening
-simulate_method.m          Closed-loop simulation loop for one controller variant
-plot_results.m             Comparison plots and summary metrics
-run_simulation.m           Main script - run this one
-results/                   Saved simulation output (created automatically)
-```
+- **Regularized blending across the GP bank.** Combining several
+  candidate GPs by minimizing a plain squared-error objective over a
+  weight simplex is a linear program, and a linear program over a simplex
+  is always optimized at a vertex — meaning the "optimal blend" collapses
+  to hard-switching between models rather than genuinely combining them.
+  Adding a quadratic regularization term turns this into a small
+  quadratic program instead, producing a smooth blend across the GP bank
+  and avoiding that switching behavior.
 
-## How to run
+- **Uncertainty-aware constraint tightening in the MPC.** Rather than
+  handing the controller only the GP bank's mean disturbance estimate,
+  the blended predictive variance is also fed back in, tightening the
+  actuator limits during periods where the disturbance estimate is
+  unreliable. This gives the controller some built-in margin instead of
+  treating every disturbance estimate as equally trustworthy.
 
-1. Open MATLAB and `cd` into this folder (or add it to the path).
-2. Requires the **Optimization Toolbox** (`fmincon`, `quadprog`).
-3. Run:
-
-   ```matlab
-   run_simulation
-   ```
-
-That single script simulates all four controller variants back to back,
-saves the results to `results/simulation_results.mat`, and produces three
-comparison figures: trajectory tracking, position error over time, and
-disturbance-prediction accuracy, followed by a printed summary table of
-RMSE tracking error and disturbance-prediction error for each method.
-
-No other file needs to be run directly — everything else is called from
-`run_simulation.m` / `simulate_method.m`.
-
-## Tuning knobs
-
-- `config.m` — sample time, horizon length, actuator limits, MPC weights.
-- `simulate_method.m` — GP buffer size `H`, weight-optimization window
-  `Nwin`, forgetting-factor bank `lambdas`, and the regularization
-  strength `rho` used by the proposed RDF-GP variant.
-- `disturbance_profile.m` — the disturbance scenario used to stress-test
-  each estimator.
+The full pipeline — vehicle dynamics, disturbance and reference
+generation, the GP-based estimator, and the uncertainty-aware MPC — is
+implemented both as a MATLAB simulation and as a closed-loop Simulink
+model, with the underlying vehicle physics (Coriolis, damping, restoring
+force, and kinematics) built as separate, clearly labeled blocks rather
+than folded into one opaque function, so the governing equations remain
+visible and traceable through the block diagram.
