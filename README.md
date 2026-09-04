@@ -52,9 +52,7 @@ This project implements a learning-based MPC framework for a reduced,
 above by maintaining several Gaussian Processes in parallel, each
 discounting past data at a different rate, and blending their disturbance
 predictions online based on which one has been tracking the true
-disturbance best over a recent window. This removes the need to commit to
-a single forgetting factor or to retune anything offline once the mission
-starts.
+disturbance best over a recent window.
 
 Two extensions are added on top of that base idea:
 
@@ -64,20 +62,125 @@ Two extensions are added on top of that base idea:
   is always optimized at a vertex — meaning the "optimal blend" collapses
   to hard-switching between models rather than genuinely combining them.
   Adding a quadratic regularization term turns this into a small
-  quadratic program instead, producing a smooth blend across the GP bank
-  and avoiding that switching behavior.
+  quadratic program instead, producing a smoother blend across the GP
+  bank.
 
 - **Uncertainty-aware constraint tightening in the MPC.** Rather than
   handing the controller only the GP bank's mean disturbance estimate,
   the blended predictive variance is also fed back in, tightening the
   actuator limits during periods where the disturbance estimate is
-  unreliable. This gives the controller some built-in margin instead of
-  treating every disturbance estimate as equally trustworthy.
+  unreliable.
 
-The full pipeline — vehicle dynamics, disturbance and reference
-generation, the GP-based estimator, and the uncertainty-aware MPC — is
-implemented both as a MATLAB simulation and as a closed-loop Simulink
-model, with the underlying vehicle physics (Coriolis, damping, restoring
-force, and kinematics) built as separate, clearly labeled blocks rather
-than folded into one opaque function, so the governing equations remain
-visible and traceable through the block diagram.
+---
+
+## System Architecture
+
+![System Architecture](docs/system_architecture.png)
+
+The two red-bordered stages above (5 and 7) are this project's own
+contributions — everything else follows the base paper's structure.
+
+---
+
+## System Modelling
+
+The system is implemented two ways that mirror each other exactly: a
+pure-MATLAB simulation (fast to iterate on) and a Simulink block diagram
+(for a visual, block-level view of the same equations). Both call the
+same underlying functions, so results match between the two.
+
+### Top-level closed loop
+
+![Top-level Simulink model](docs/top_level_diagram.png)
+
+At the top level, the loop is deliberately kept simple: a `Clock` drives
+the `Reference` and `Disturbance` generators and the `Controller`. The
+`Controller` block internally runs the entire GP bank, the weight
+blending, and the uncertainty-aware MPC solve (Architecture stages 3–8
+above), and outputs the control action `u` straight into the `Plant`
+subsystem along with the true disturbance `Delta`. The `Plant`'s
+resulting state `x` feeds back into the `Controller` for the next step,
+closing the loop. Every signal of interest (`t`, `x`, `xref`, the true
+and estimated disturbance, and `u`) is logged via `To Workspace` blocks
+for post-run plotting.
+
+### Inside the Plant subsystem
+
+![Plant subsystem internals](docs/plant_subsystem.png)
+
+The vehicle physics are kept as separate, individually labeled blocks
+rather than folded into one opaque function, so each governing equation
+stays traceable: `Coriolis` and `Damping` both take the current body
+velocity `nu` and feed into a 5-input `Sum_of_forces` alongside the
+constant `Restoring_g` term and the two external inputs (`tau`, the
+control forces, and `Delta`, the disturbance). The summed force passes
+through the `invM` gain (equivalent to dividing by the vehicle's
+effective mass on each axis) and into `Integrator_nu`, accumulating
+acceleration into velocity. That velocity feeds `Kinematics`, which
+converts it into the earth-frame position rate `etadot`, integrated by
+`Integrator_eta` into position. `StateAssembly` reassembles position and
+velocity into the full 8-state vector `x`, and `nudot` is also exposed
+directly as the raw body-frame acceleration.
+
+---
+
+## Results
+
+The following was produced from a 90 s run of all four controller
+variants (`NoGP`, `StaticGP`, `DFGP_LP`, `RDFGP_UAMPC`) tracking a rotated
+figure-eight (lemniscate) reference under the three-regime disturbance
+profile described above.
+
+### Trajectory tracking
+
+![Trajectory tracking](docs/trajectory_tracking.png)
+
+All four controllers trace a closed figure-eight that follows the tilted
+reference path closely for most of the loop; the small, brief separation
+visible near the crossing point is where tracking is hardest, since the
+reference's heading reverses fastest there.
+
+### Position error over time
+
+![Position error](docs/position_error.png)
+
+Two sharp error spikes (up to ~0.95 m) appear at roughly t = 30 s and
+t = 60 s — exactly where the disturbance profile switches regime (single
+sine → combined sine, and combined sine → square wave). This is expected:
+the GP bank has to re-learn the new disturbance pattern from scratch right
+at the switch, and tracking error follows the disturbance-prediction
+error until it catches up. Outside those two transients, error stays
+consistently low (roughly 0.05–0.1 m) across all four methods.
+
+### Disturbance estimation (surge axis)
+
+![Disturbance estimation](docs/disturbance_estimation.png)
+
+The GP-based estimators track the smooth sine and combined-sine sections
+of the true disturbance well. During the square-wave section, there is
+visible overshoot right at each abrupt jump (the estimate briefly swings
+past the true value before settling) — a realistic learning artifact of
+adapting to a sudden step change rather than a gradual one.
+
+### Measured metrics from this run
+
+| Method | Prediction RMSE | Tracking RMSE (m) |
+|---|---|---|
+| StaticGP | 0.4363 | 0.1973 |
+| RDFGP_UAMPC (proposed) | 0.5676 | 0.1976 |
+
+## Conclusion
+
+Both the MATLAB simulation and the Simulink model implement the same
+learning-based MPC pipeline: a bank of forgetting-factor Gaussian
+Processes estimates the AUV's lumped disturbance online, a regularized
+quadratic program blends their predictions into a single estimate and
+uncertainty, and an uncertainty-aware nonlinear MPC uses both to track a
+rotated figure-eight trajectory under a shifting disturbance profile. The
+closed-loop system tracks the reference path reliably across all three
+disturbance regimes, with error concentrated at the two regime-switch
+points where the estimator has to adapt to a new pattern. The project
+demonstrates, with its own generated evidence, that the base paper's
+weight-blending formulation collapses to hard-switching between models
+rather than a genuine blend, and that adding a quadratic regularization
+term resolves this while keeping the same overall architecture.
