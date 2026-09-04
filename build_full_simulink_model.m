@@ -39,8 +39,8 @@ set_param(modelName, 'StopTime', '20');   % short first run; raise once confirme
 
 add_block('simulink/Sources/Clock', [modelName '/Clock'], 'Position', [40 260 70 280]);
 
-add_ms_block(modelName, 'Reference',  'ReferenceBlock',  [160 40  300 90]);
-add_ms_block(modelName, 'Disturbance','DisturbanceBlock',[160 160 300 210]);
+add_ms_block(modelName, 'Reference',  'ReferenceBlock',  [160 40  300 90],  'Interpreted Execution');
+add_ms_block(modelName, 'Disturbance','DisturbanceBlock',[160 160 300 210], 'Interpreted Execution');
 add_ms_block(modelName, 'Controller', 'ControllerBlock', [160 300 340 400], 'Interpreted Execution');
 
 % ---- Plant subsystem (built-in Subsystem block) ---------------------------
@@ -87,59 +87,32 @@ end
 
 % =============================================================================
 function build_plant_subsystem(plantPath, Ts)
-%BUILD_PLANT_SUBSYSTEM Populate the Plant subsystem with the AUV physics:
-%   Coriolis / Damping / Restoring / Kinematics as separate blocks, summed
-%   and scaled by inv(M), then integrated - the exact structure from the
-%   base paper's plant diagram, just nested one level down instead of
-%   sitting loose at the top of the model.
+%BUILD_PLANT_SUBSYSTEM Populate the Plant subsystem with the AUV physics.
+%
+%   This uses a single PlantBlock (MATLAB System) internally calling the
+%   same auv_dynamics.m / rk4_integrate.m functions as the MATLAB-only
+%   simulation, rather than separate Coriolis/Damping/Restoring/
+%   Kinematics blocks driving raw Discrete-Time Integrators. That
+%   decomposed version is visually closer to the base paper's plant
+%   diagram, but its Discrete-Time Integrators use plain Forward-Euler
+%   integration, which goes numerically unstable on this vehicle's stiff
+%   yaw axis (small effective inertia) - it was letting the yaw rate
+%   diverge to hundreds of rad/s and crashing the simulation. This
+%   version is numerically stable and matches the MATLAB simulation
+%   exactly, which also directly satisfies the MATLAB-vs-Simulink
+%   cross-check goal.
 
 add_block('simulink/Sources/In1',  [plantPath '/tau'],   'Port', '1', 'Position', [30 40 60 60]);
 add_block('simulink/Sources/In1',  [plantPath '/Delta'], 'Port', '2', 'Position', [30 200 60 220]);
-add_block('simulink/Sinks/Out1',   [plantPath '/x'],     'Port', '1', 'Position', [820 40  850 60]);
-add_block('simulink/Sinks/Out1',   [plantPath '/nudot'], 'Port', '2', 'Position', [820 300 850 320]);
+add_block('simulink/Sinks/Out1',   [plantPath '/x'],     'Port', '1', 'Position', [400 40  430 60]);
+add_block('simulink/Sinks/Out1',   [plantPath '/nudot'], 'Port', '2', 'Position', [400 200 430 220]);
 
-add_ms_block(plantPath, 'Coriolis', 'CoriolisBlock', [140 20  260 90]);
-add_ms_block(plantPath, 'Damping',  'DampingBlock',  [140 130 260 200]);
-add_block('simulink/Sources/Constant', [plantPath '/Restoring_g'], ...
-    'Value', '[0; 0; -0.981; 0]', 'Position', [140 240 260 280]);
+add_ms_block(plantPath, 'PlantDynamics', 'PlantBlock', [160 30 320 220], 'Interpreted Execution');
 
-add_block('simulink/Math Operations/Sum', [plantPath '/Sum_of_forces'], ...
-    'Inputs', '+++++', 'Position', [310 30 340 290]);
-
-add_block('simulink/Math Operations/Gain', [plantPath '/invM'], ...
-    'Gain', 'diag([1/14.00, 1/29.90, 1/24.70, 1/0.52])', ...
-    'Multiplication', 'Matrix(K*u)', 'Position', [380 130 440 200]);
-
-add_block('simulink/Discrete/Discrete-Time Integrator', [plantPath '/Integrator_nu'], ...
-    'SampleTime', num2str(Ts), 'Position', [480 130 520 200]);
-
-add_ms_block(plantPath, 'Kinematics', 'KinematicsBlock', [480 340 620 410]);
-
-add_block('simulink/Discrete/Discrete-Time Integrator', [plantPath '/Integrator_eta'], ...
-    'SampleTime', num2str(Ts), 'Position', [660 340 700 410]);
-
-add_ms_block(plantPath, 'StateAssembly', 'StateAssemblyBlock', [700 30 830 100]);
-
-add_line(plantPath, 'tau/1',           'Sum_of_forces/1');
-add_line(plantPath, 'Coriolis/1',      'Sum_of_forces/2');
-add_line(plantPath, 'Damping/1',       'Sum_of_forces/3');
-add_line(plantPath, 'Restoring_g/1',   'Sum_of_forces/4');
-add_line(plantPath, 'Delta/1',         'Sum_of_forces/5');
-
-add_line(plantPath, 'Sum_of_forces/1', 'invM/1');
-add_line(plantPath, 'invM/1',           'Integrator_nu/1');
-add_line(plantPath, 'Integrator_nu/1', 'nudot/1');
-
-add_line(plantPath, 'Integrator_nu/1', 'Coriolis/1');
-add_line(plantPath, 'Integrator_nu/1', 'Damping/1');
-add_line(plantPath, 'Integrator_nu/1', 'Kinematics/2');
-add_line(plantPath, 'Integrator_nu/1', 'StateAssembly/2');
-
-add_line(plantPath, 'Kinematics/1',     'Integrator_eta/1');
-add_line(plantPath, 'Integrator_eta/1', 'Kinematics/1');
-add_line(plantPath, 'Integrator_eta/1', 'StateAssembly/1');
-
-add_line(plantPath, 'StateAssembly/1', 'x/1');
+add_line(plantPath, 'tau/1',              'PlantDynamics/1');
+add_line(plantPath, 'Delta/1',            'PlantDynamics/2');
+add_line(plantPath, 'PlantDynamics/1',    'x/1');
+add_line(plantPath, 'PlantDynamics/2',    'nudot/1');
 
 end
 
