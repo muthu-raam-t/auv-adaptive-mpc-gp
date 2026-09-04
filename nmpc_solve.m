@@ -28,6 +28,23 @@ ub = ub * (1 - shrink);
 costfun = @(uvec) mpc_cost(uvec, x0, xref_seq, d_hat, p);
 options = optimoptions('fmincon', 'Display', 'off', 'Algorithm', 'sqp', 'MaxIterations', 60);
 
+% Evaluate the cost directly at the initial guess before handing off to
+% fmincon. fmincon's own error message for a bad initial point ("Objective
+% function is undefined at initial point") swallows the real underlying
+% cause - this makes it surface directly, either as the true MATLAB error
+% (if mpc_cost/rk4_integrate actually throws) or as a clear report of
+% exactly which input was non-finite.
+J0 = mpc_cost(u0vec, x0, xref_seq, d_hat, p);
+if ~isfinite(J0)
+    error('nmpc_solve:badInitialCost', ...
+        ['Initial MPC cost is non-finite (J0 = %g).\n' ...
+         'x0        = %s\n' ...
+         'd_hat     = %s\n' ...
+         'sigma2_hat= %s\n' ...
+         'u0vec any non-finite: %d'], ...
+        J0, mat2str(x0'), mat2str(d_hat'), mat2str(sigma2_hat'), any(~isfinite(u0vec)));
+end
+
 uvec_opt = fmincon(costfun, u0vec, [], [], [], [], lb, ub, [], options);
 
 U = reshape(uvec_opt, nu, Nc)';
