@@ -20,11 +20,22 @@ classdef PlantBlock < matlab.System
         end
 
         function [x_out, nudot_out] = stepImpl(obj, tau, Delta)
+            % IMPORTANT: x_out must be the state as it stood BEFORE this
+            % step (i.e. NOT computed from the current tau/Delta). If it
+            % depended on the current input, Plant's output would depend
+            % on Controller's output with zero delay, while Controller
+            % simultaneously depends on Plant's output - an algebraic
+            % loop with nothing to break it. Returning the pre-update
+            % state first, then updating afterward for next call,
+            % restores the one-step delay a discrete state block needs
+            % (exactly what the old Discrete-Time Integrator blocks did
+            % automatically).
+            x_out = obj.x;
+
             xdot_now  = auv_dynamics(obj.x, tau, Delta, obj.p);
             nudot_out = xdot_now([4 5 6 8]);
 
             obj.x = rk4_integrate(obj.x, tau, Delta, obj.p, obj.p.Ts);
-            x_out = obj.x;
         end
 
         function resetImpl(obj)
