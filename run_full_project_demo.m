@@ -10,12 +10,12 @@
 % Have the figures already open and ready, then just narrate them.
 
 fprintf('\n=================================================\n');
-fprintf(' PART 1: Paper-style multi-method comparison (MATLAB)\n');
+fprintf(' PART 1: Simulation Results\n');
 fprintf('=================================================\n');
 run_simulation
 
 fprintf('\n=================================================\n');
-fprintf(' PART 2: Simulink - matches MATLAB exactly (single Plant block)\n');
+fprintf(' PART 2: Simulink Model\n');
 fprintf('=================================================\n');
 bdclose('auv_full_system')
 if exist('auv_full_system.slx', 'file'); delete('auv_full_system.slx'); end
@@ -24,7 +24,7 @@ sim('auv_full_system')
 plot_simulink_results
 
 fprintf('\n=================================================\n');
-fprintf(' PART 3: Simulink - block-decomposed physics (matches paper diagram)\n');
+fprintf(' PART 3: Simulink Model (Block Diagram)\n');
 fprintf('=================================================\n');
 bdclose('auv_full_system_decomposed')
 if exist('auv_full_system_decomposed.slx', 'file'); delete('auv_full_system_decomposed.slx'); end

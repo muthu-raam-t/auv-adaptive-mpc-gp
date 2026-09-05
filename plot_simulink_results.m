@@ -33,18 +33,9 @@ X     = squeeze(X);
 Xref  = squeeze(Xref);
 Dtrue = squeeze(Dtrue);
 Dhat  = squeeze(Dhat);
-
-% Keep only the actual control-decision points (ControllerBlock holds
-% its estimate for SUBSTEPS fine ticks at a time to keep the plant's
-% integration stable) - this removes the staircase artifact and matches
-% the MATLAB-only simulation's time resolution.
-SUBSTEPS = 16;   % must match ControllerBlock.SUBSTEPS
-idx = 1:SUBSTEPS:numel(t);
-t     = t(idx);
-X     = X(:, idx);
-Xref  = Xref(:, idx);
-Dtrue = Dtrue(:, idx);
-Dhat  = Dhat(:, idx);
+% No downsampling needed here: ControllerBlock now solves every tick
+% (matching simulate_method.m's cadence exactly), so there is no
+% staircase-hold artifact to remove.
 
 pos_error = sqrt(sum((X(1:2, :) - Xref(1:2, :)).^2, 1));
 
@@ -79,7 +70,5 @@ grid on; box on;
 fprintf('\n=== Simulink Run Summary ===\n');
 fprintf('RMSE position error  : %.4f m\n', sqrt(mean(pos_error.^2)));
 fprintf('RMSE disturbance err : %.4f\n', sqrt(mean(sum((Dhat - Dtrue).^2, 1))));
-fprintf('\nFor the multi-method paper-style comparison (No GP / StaticGP /\n');
-fprintf('DFGP_LP / RDFGP_UAMPC overlaid), run run_simulation.m instead.\n');
 
 end
