@@ -7,7 +7,10 @@ vars = {'t_log', 'x_log', 'xref_log', 'dtrue_log', 'dhat_log', 'u_log'};
 for i = 1:numel(vars)
     if ~evalin('base', sprintf('exist(''%s'',''var'')', vars{i}))
         error('plot_simulink_results:missingVar', ...
-            'Variable "%s" not found in the base workspace. Run the Simulink model first.', vars{i});
+            ['Variable "%s" not found in the base workspace.\n' ...
+             'Run the Simulink model with sim(''auv_full_system'') first ' ...
+             '(not "out = sim(...)" - that bundles everything into an ' ...
+             'object instead of writing it to the workspace).'], vars{i});
     end
 end
 
@@ -19,13 +22,15 @@ Dhat   = evalin('base', 'dhat_log');
 
 t = t(:)';
 
-% To Workspace with 'Array' format logs N x M (time along rows) -
-% transpose so downstream indexing matches the rest of the project
-% (columns = time samples).
-X     = X';
-Xref  = Xref';
-Dtrue = Dtrue';
-Dhat  = Dhat';
+% "To Workspace" blocks with SaveFormat='Array' log a vector signal of
+% dimension d as a [d x 1 x N] 3-D array (time along the 3rd dimension).
+% squeeze() collapses that straight to [d x N], matching the
+% dim-by-time convention used everywhere else in this project - no
+% transpose needed.
+X     = squeeze(X);
+Xref  = squeeze(Xref);
+Dtrue = squeeze(Dtrue);
+Dhat  = squeeze(Dhat);
 
 pos_error = sqrt(sum((X(1:2, :) - Xref(1:2, :)).^2, 1));
 

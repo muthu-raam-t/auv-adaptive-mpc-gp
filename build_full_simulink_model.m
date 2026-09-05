@@ -42,6 +42,11 @@ new_system(modelName);
 open_system(modelName);
 set_param(modelName, 'Solver', 'FixedStepDiscrete', 'FixedStep', num2str(model_step));
 set_param(modelName, 'StopTime', '20');   % short first run; raise once confirmed working
+set_param(modelName, 'ReturnWorkspaceOutputs', 'off');   % write To Workspace logs
+                                                           % straight to the base
+                                                           % workspace, not bundled
+                                                           % into a SimulationOutput
+                                                           % object
 
 % =============================================================================
 % TOP LEVEL: Clock, Reference, Disturbance, Controller, Plant, Loggers
