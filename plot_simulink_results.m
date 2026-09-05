@@ -32,6 +32,20 @@ Xref  = squeeze(Xref);
 Dtrue = squeeze(Dtrue);
 Dhat  = squeeze(Dhat);
 
+% ControllerBlock only makes a new control decision once every SUBSTEPS
+% fine ticks (needed to keep the Plant's integration numerically
+% stable), holding its estimate steady in between. Logging every fine
+% tick therefore shows a staircase instead of a smooth curve. Keeping
+% only the actual decision points removes that artifact and lines the
+% data up with the same time resolution the MATLAB-only simulation uses.
+SUBSTEPS = 16;   % must match ControllerBlock.SUBSTEPS
+idx = 1:SUBSTEPS:numel(t);
+t     = t(idx);
+X     = X(:, idx);
+Xref  = Xref(:, idx);
+Dtrue = Dtrue(:, idx);
+Dhat  = Dhat(:, idx);
+
 pos_error = sqrt(sum((X(1:2, :) - Xref(1:2, :)).^2, 1));
 
 figure('Name', 'Simulink Trajectory Tracking');

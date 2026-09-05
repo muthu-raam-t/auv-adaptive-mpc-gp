@@ -41,7 +41,8 @@ end
 new_system(modelName);
 open_system(modelName);
 set_param(modelName, 'Solver', 'FixedStepDiscrete', 'FixedStep', num2str(model_step));
-set_param(modelName, 'StopTime', '20');   % short first run; raise once confirmed working
+set_param(modelName, 'StopTime', num2str(p.Tf));   % full run by default, now that
+                                                     % the integration is stable
 set_param(modelName, 'ReturnWorkspaceOutputs', 'off');   % write To Workspace logs
                                                            % straight to the base
                                                            % workspace, not bundled
