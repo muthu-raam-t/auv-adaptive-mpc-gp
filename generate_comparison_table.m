@@ -12,14 +12,14 @@ paper_NoGP_pred    = NaN;    paper_NoGP_track    = 0.1050;
 paper_DFGP_pred    = 0.289;  paper_DFGP_track    = 0.0285;
 
 fprintf('\n=== Comparison Table ===\n\n');
-fprintf('%-14s %16s %10s %10s | %16s %10s %10s\n', ...
-    'Method', 'PredErr(paper)', 'ours', 'delta%', 'TrackErr(paper)', 'ours', 'delta%');
-fprintf('%s\n', repmat('-', 1, 100));
+fprintf('%-14s %18s %14s %10s | %18s %14s %10s\n', ...
+    'Method', 'Base Paper (Pred)', 'Proposed', 'delta%', 'Base Paper (Track)', 'Proposed', 'delta%');
+fprintf('%s\n', repmat('-', 1, 108));
 
 print_row('No GP',     paper_NoGP_pred, results.NoGP.dist_pred_error, ...
-                       paper_NoGP_track, results.NoGP.rmse_pos);
+                       paper_NoGP_track, results.NoGP.rmse_pos, 'N/A (no disturbance estimation)');
 print_row('DF-GP(LP)', paper_DFGP_pred, results.DFGP_LP.dist_pred_error, ...
-                       paper_DFGP_track, results.DFGP_LP.rmse_pos);
+                       paper_DFGP_track, results.DFGP_LP.rmse_pos, '');
 
 fprintf('\nRegularized dynamic-forgetting GP with uncertainty-aware MPC:\n');
 fprintf('    prediction RMSE = %.4f,  tracking RMSE = %.4f m\n', ...
@@ -31,15 +31,24 @@ fprintf('    prediction RMSE = %.4f,  tracking RMSE = %.4f m\n', ...
 
 end
 
-function print_row(name, paperPred, oursPred, paperTrack, oursTrack)
+function print_row(name, paperPred, oursPred, paperTrack, oursTrack, naNote)
 if isnan(paperPred)
     predStr = '--';
-    deltaPredStr = '--';
 else
     predStr = sprintf('%.3f', paperPred);
-    deltaPredStr = sprintf('%+.0f%%', 100*(oursPred - paperPred)/paperPred);
+end
+if isnan(oursPred)
+    oursPredStr = naNote;
+    deltaPredStr = '--';
+else
+    oursPredStr = sprintf('%.3f', oursPred);
+    if isnan(paperPred)
+        deltaPredStr = '--';
+    else
+        deltaPredStr = sprintf('%+.0f%%', 100*(oursPred - paperPred)/paperPred);
+    end
 end
 deltaTrackStr = sprintf('%+.0f%%', 100*(oursTrack - paperTrack)/paperTrack);
-fprintf('%-14s %16s %10.3f %10s | %16.4f %10.4f %10s\n', ...
-    name, predStr, oursPred, deltaPredStr, paperTrack, oursTrack, deltaTrackStr);
+fprintf('%-14s %18s %14s %10s | %18.4f %14.4f %10s\n', ...
+    name, predStr, oursPredStr, deltaPredStr, paperTrack, oursTrack, deltaTrackStr);
 end
