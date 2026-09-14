@@ -3,8 +3,9 @@ classdef ControllerBlock < matlab.System
     %   GPs (ForgettingGP.m) blended by a regularised weight optimisation
     %   (dynamic_weight_qp.m), feeding a disturbance estimate + variance
     %   into an uncertainty-aware nonlinear MPC (nmpc_solve.m). Reuses the
-    %   exact same functions as the MATLAB-only simulation so this block
-    %   and simulate_method.m behave identically.
+    %   exact same functions, called at the exact same rate (once per
+    %   Ts), as the MATLAB-only simulation (simulate_method.m) - this is
+    %   what makes the Simulink run's results match run_simulation.m's.
     %
     %   Inputs  t (scalar time), x (8x1 measured state)
     %   Outputs u (4x1 control), d_hat (4x1 disturbance estimate),
@@ -22,22 +23,6 @@ classdef ControllerBlock < matlab.System
         Nwin
         rho
         hasHistory
-        tickCounter
-        u_hold
-        d_hat_hold
-        sig2_hat_hold
-    end
-
-    properties (Constant, Access = private)
-        % Must match PLANT_SUBSTEPS in build_full_simulink_model.m. The
-        % Simulink model ticks this block much more often than the
-        % control decision rate (so the Plant's internal Discrete-Time
-        % Integrators stay numerically stable); this block only actually
-        % re-solves the GP+MPC logic once every SUBSTEPS ticks and holds
-        % its previous output the rest of the time, keeping the actual
-        % control rate - and the simulation's wall-clock cost - the same
-        % as before.
-        SUBSTEPS = 16;
     end
 
     methods (Access = protected)
@@ -61,23 +46,9 @@ classdef ControllerBlock < matlab.System
             obj.u_prev     = zeros(4,1);
             obj.u_guess    = zeros(obj.p.Nc, 4);
             obj.hasHistory = false;
-
-            obj.tickCounter   = 0;
-            obj.u_hold        = zeros(4,1);
-            obj.d_hat_hold    = zeros(4,1);
-            obj.sig2_hat_hold = zeros(4,1);
         end
 
         function [u, d_hat, sig2_hat] = stepImpl(obj, t, x)
-            if mod(obj.tickCounter, obj.SUBSTEPS) ~= 0
-                % Not a control-decision tick: hold the previous output.
-                u        = obj.u_hold;
-                d_hat    = obj.d_hat_hold;
-                sig2_hat = obj.sig2_hat_hold;
-                obj.tickCounter = obj.tickCounter + 1;
-                return;
-            end
-
             nd = 4;
             d_hat    = zeros(nd,1);
             sig2_hat = zeros(nd,1);
@@ -120,11 +91,6 @@ classdef ControllerBlock < matlab.System
             obj.x_prev     = x;
             obj.u_prev     = u;
             obj.hasHistory = true;
-
-            obj.u_hold        = u;
-            obj.d_hat_hold    = d_hat;
-            obj.sig2_hat_hold = sig2_hat;
-            obj.tickCounter   = obj.tickCounter + 1;
         end
 
         function resetImpl(obj)
