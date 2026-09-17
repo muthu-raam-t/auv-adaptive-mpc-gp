@@ -3,29 +3,29 @@
 ## Introduction
 
 Autonomous underwater vehicles (AUVs) are used for pipeline inspection,
-seabed mapping, and subsea survey — work that depends on holding an
-accurate position while pushed around by a constantly shifting
-environment. The base paper validated its method in the **Mobula**
-underwater simulator plus real BlueROV2 pool tests. This project
-reproduces and extends the same control framework entirely in
-**MATLAB + Simulink**, without hardware access.
+seabed mapping, and subsea survey — applications that depend on holding
+an accurate position while subject to a constantly shifting environment.
+The base paper validated its method in the Mobula underwater simulator
+and on a real BlueROV2 in physical pool tests. This project reproduces
+and extends the same control framework entirely in MATLAB and Simulink,
+without hardware access.
 
 ## Problem Statement
 
-MPC plans ahead over a future horizon but is only as good as the model
-it optimizes against. The unmodeled portion of the vehicle's behavior —
-currents, tether pull, thrust degradation — acts like an external
-disturbance; if the controller cannot estimate it, tracking degrades
-exactly when precision matters most. A single GP with one fixed
-"forgetting factor" cannot handle disturbances that change character
-mid-mission.
+Model Predictive Control (MPC) plans ahead over a future horizon but is
+only as good as the model it optimizes against. The unmodeled portion of
+a vehicle's behavior — currents, tether pull, thrust degradation — acts
+as an external disturbance; if the controller cannot estimate it,
+tracking accuracy degrades exactly when precision matters most. A single
+Gaussian Process (GP) with a fixed "forgetting factor" cannot handle
+disturbances that change character mid-mission.
 
 ## Solution Provided
 
-A learning-based MPC that blends several GPs (each trusting recent vs.
-old data differently) online, extended with two core novelties to the
-control algorithm plus four further validation/industrial-relevance
-additions.
+A learning-based MPC framework that blends several Gaussian Processes,
+each discounting past data at a different rate, online. The framework is
+extended with two core algorithmic contributions and four further
+validation and industrial-relevance studies.
 
 ---
 
@@ -34,168 +34,176 @@ additions.
 ![System Architecture](docs/system_architecture.png)
 
 Red-bordered stages inside the control loop are the two core algorithmic
-novelties. The parallel MATLAB / Simulink branch and the fault-tolerance
-and Monte-Carlo stages are the further validation work described below.
+contributions. The parallel MATLAB/Simulink branch and the fault-tolerance
+and Monte Carlo stages correspond to the additional validation work
+described below.
 
 ---
 
-## All Equations — Paper vs. This Project
+## Equation-Level Comparison with the Base Paper
 
-| Eq. | What it is | Formula | Status |
+| Eq. | Description | Formula | Status |
 |---|---|---|---|
-| 1–3 | Position kinematics | `x_dot=cos(psi)u-sin(psi)v`, `y_dot=sin(psi)u+cos(psi)v`, `z_dot=w` | Same |
-| 4 | Surge dynamics | `(m-Xu_dot)u_dot = X+(mv+Yv_dot·v)r+(Xu+Xuc\|u\|)u+Delta_x` | Same |
-| 5 | Sway dynamics | `(m-Yv_dot)v_dot = Y-(mu+Xu_dot·u)r+(Yv+Yvc\|v\|)v+Delta_y` | Same |
-| 6 | Heave dynamics | `(m-Zw_dot)w_dot = Z+(Zw+Zwc\|w\|)w+(m-Vsub·rho)g+Delta_z` | Same |
-| 7 | Heading kinematics | `psi_dot = r` | Same |
-| 8 | Yaw dynamics | `(Izz-Nr_dot)r_dot = Mz-(mv-Yv_dot·v)u-(Xu_dot·u-mu)v+(Nr+Nrc\|r\|)r+Delta_Mz` | Same |
-| 9 | Bundled state-space form | `x_dot = f(x,u,Delta)` | Same |
-| 10 | State vector | `x = [x,y,z,u,v,w,psi,r]^T` | Same |
-| 11 | Control vector | `u = [X,Y,Z,Mz]^T` | Same |
-| 12a | MPC cost | `sum[(x_k-x_ref)'Q(x_k-x_ref)+u_k'Ru_k] + terminal` | Same |
-| 12b | Dynamics constraint | `x_{k+1}=f_d(x_k,u_k,Delta)` (RK4) | Same (solved via `fmincon`, paper uses qpOASES) |
-| 12c | Actuator bounds | `u_min <= u_k <= u_max` | Same |
-| 13 | Training dataset | `D = D1 (static) UNION D2 (sliding)` | **Changed** — single sliding buffer only |
-| 14 | Observation model | `y_i = f(a_i) + eps_i,  eps_i~N(0,sigma_eps^2)` | Same |
-| 15 | Joint Gaussian prior | `[y;f*] ~ N(0,[[K+sigma^2 I, k*],[k*^T,k**]])` | Same |
-| 16 | Kernel | `k(a,a')=sigma_f^2·exp(-0.5(a-a')^T L^-2(a-a'))` | Same |
-| 17 | Hyperparameter fit | `theta_opt = argmin[NLL]` via conjugate gradient | **Changed** — closed-form heuristic, no iteration |
-| 18–19 | Dense GP posterior mean/variance | Standard GP formulas | **Changed** — merged directly into the forgetting-weighted form |
-| 20–21 | Adaptive Sparse GP mean/variance | Sparse, inducing-point form | **Changed** — dense weighted-kernel-ridge instead |
-| 22 | Forgetting matrix | `Lambda=diag(lambda^(n-1),...,lambda^0)` | **Changed** — folded into per-sample weight `w_i` |
-| 23 | Sparse precision matrix | `B_lambda=(Kss+sigma^-2·Ksa·Lambda·Kas)^-1` | **Changed** — not used (no sparse structure) |
-| 24 | GP input feature | Full history window `[Delta,x,u]` back `H` steps | **Changed** — current state only: `a=[u,v,w,r]` |
-| 25 | GP target | `y = Delta_tau` | Same |
-| 26a | Weight objective | `min_eta sum_j(eta_j·error_j)` | **Changed** — `+ rho·‖eta‖^2` added (Novelty 1) |
-| 26b–c | Weight constraints | `sum(eta)=1`, `eta>=0` | Same |
-| 27 | LP standard form | `min c'eta  s.t. a'eta=b, eta>=0` | Same in spirit (ours is QP when `rho>0`) |
-| 28 | Fused mean | `Delta_hat = sum(eta_j·mu_j)` | Same |
-| 29 | Fused variance | `Sigma_hat = sum(eta_j·sigma2_j)` | Same formula — **Changed in use**: paper never feeds this into control; we do (Novelty 2) |
-| alpha_i | Recency weight | `alpha_i = e^(0.05(N-i))` | Same |
+| 1–3 | Position kinematics | `x_dot=cos(psi)u-sin(psi)v`, `y_dot=sin(psi)u+cos(psi)v`, `z_dot=w` | Unchanged |
+| 4 | Surge dynamics | `(m-Xu_dot)u_dot = X+(mv+Yv_dot·v)r+(Xu+Xuc\|u\|)u+Delta_x` | Unchanged |
+| 5 | Sway dynamics | `(m-Yv_dot)v_dot = Y-(mu+Xu_dot·u)r+(Yv+Yvc\|v\|)v+Delta_y` | Unchanged |
+| 6 | Heave dynamics | `(m-Zw_dot)w_dot = Z+(Zw+Zwc\|w\|)w+(m-Vsub·rho)g+Delta_z` | Unchanged |
+| 7 | Heading kinematics | `psi_dot = r` | Unchanged |
+| 8 | Yaw dynamics | `(Izz-Nr_dot)r_dot = Mz-(mv-Yv_dot·v)u-(Xu_dot·u-mu)v+(Nr+Nrc\|r\|)r+Delta_Mz` | Unchanged |
+| 9 | Bundled state-space form | `x_dot = f(x,u,Delta)` | Unchanged |
+| 10 | State vector | `x = [x,y,z,u,v,w,psi,r]^T` | Unchanged |
+| 11 | Control vector | `u = [X,Y,Z,Mz]^T` | Unchanged |
+| 12a | MPC cost function | `sum[(x_k-x_ref)'Q(x_k-x_ref)+u_k'Ru_k] + terminal` | Unchanged |
+| 12b | Dynamics constraint | `x_{k+1}=f_d(x_k,u_k,Delta)` (RK4) | Unchanged (solved via `fmincon`; paper uses qpOASES) |
+| 12c | Actuator bounds | `u_min <= u_k <= u_max` | Unchanged |
+| 13 | Training dataset | `D = D1 (static) UNION D2 (sliding)` | Modified — single sliding buffer only |
+| 14 | Observation model | `y_i = f(a_i) + eps_i,  eps_i~N(0,sigma_eps^2)` | Unchanged |
+| 15 | Joint Gaussian prior | `[y;f*] ~ N(0,[[K+sigma^2 I, k*],[k*^T,k**]])` | Unchanged |
+| 16 | Kernel | `k(a,a')=sigma_f^2·exp(-0.5(a-a')^T L^-2(a-a'))` | Unchanged |
+| 17 | Hyperparameter fitting | `theta_opt = argmin[NLL]` via conjugate gradient | Modified — closed-form heuristic, non-iterative |
+| 18–19 | Dense GP posterior mean/variance | Standard GP formulas | Modified — merged into the forgetting-weighted form |
+| 20–21 | Adaptive Sparse GP mean/variance | Sparse, inducing-point formulation | Modified — dense weighted-kernel-ridge formulation instead |
+| 22 | Forgetting matrix | `Lambda=diag(lambda^(n-1),...,lambda^0)` | Modified — folded into per-sample weight `w_i` |
+| 23 | Sparse precision matrix | `B_lambda=(Kss+sigma^-2·Ksa·Lambda·Kas)^-1` | Modified — not used (no sparse structure) |
+| 24 | GP input feature | Full history window `[Delta,x,u]` over `H` steps | Modified — current state only: `a=[u,v,w,r]` |
+| 25 | GP target | `y = Delta_tau` | Unchanged |
+| 26a | Weight objective | `min_eta sum_j(eta_j·error_j)` | Modified — regularization term `rho·‖eta‖^2` added |
+| 26b–c | Weight constraints | `sum(eta)=1`, `eta>=0` | Unchanged |
+| 27 | LP standard form | `min c'eta  s.t. a'eta=b, eta>=0` | Equivalent in spirit; the modified version is a QP when `rho>0` |
+| 28 | Fused mean | `Delta_hat = sum(eta_j·mu_j)` | Unchanged |
+| 29 | Fused variance | `Sigma_hat = sum(eta_j·sigma2_j)` | Formula unchanged; usage modified — the base paper computes but never applies this term in the control law |
+| alpha_i | Recency weight | `alpha_i = e^(0.05(N-i))` | Unchanged |
 
 ---
 
-## Novelties — Complete List
+## Contributions
 
-1. **Regularized dynamic weight blending** (Eq. 26a) — the paper's blend is
-   linear in the weights, so it always collapses to a hard switch between
-   GPs (a simplex-LP always optimizes at a vertex). Adding `rho·‖eta‖^2`
-   makes it a genuine blend. **Measured: weight churn drops from
-   0.049/step (plain LP) to 0.045/step (regularized QP).**
-2. **Uncertainty-aware MPC** (Eq. 29 use) — the paper computes the fused
-   GP variance but never feeds it into the control law (stated future
-   work). This project uses it directly to tighten actuator bounds when
-   the disturbance estimate is unreliable.
-3. **Thruster fault-tolerance testing** — a mid-mission actuator fault
-   (yaw-thruster efficiency drops to 50% at t=45s) is absorbed by the
-   *existing* disturbance-learning pipeline, no new algorithm required,
-   because a fault and a disturbance are mathematically indistinguishable
-   to the controller.
-4. **Sensor noise + Monte Carlo validation** — an 8-seed statistical study
-   under realistic DVL/IMU-style measurement noise, reporting mean and
-   standard deviation instead of a single run.
-5. **Industrial-relevance reframing** — mission-spec compliance and
-   actuator-energy usage, business-relevant metrics beyond raw RMSE.
-6. **Dual Simulink validation** — two independent block-diagram
-   implementations, an algebraic-loop diagnosis and fix (explicit Unit
-   Delay), and a documented integration-accuracy trade-off between them.
+1. **Regularized dynamic weight blending.** The base paper's weight
+   objective (Eq. 26a) is linear in the weights, so the optimum is always
+   located at a vertex of the probability simplex — the resulting "blend"
+   is in fact a hard switch between GP models. Introducing a quadratic
+   regularization term produces a genuine blend. Measured effect: mean
+   weight churn decreases from 0.049 per step (linear program) to 0.045
+   per step (regularized quadratic program).
+2. **Uncertainty-aware MPC.** The base paper computes the fused GP
+   variance (Eq. 29) but does not apply it in the control law, noting
+   this as future work. This project uses the variance to tighten
+   actuator bounds when the disturbance estimate is unreliable.
+3. **Thruster fault-tolerance evaluation.** A mid-mission actuator fault
+   (yaw-thruster efficiency reduced to 50% at t = 45s) is partially
+   absorbed by the existing disturbance-learning pipeline without any
+   additional algorithm, since an actuator fault and an external
+   disturbance are indistinguishable to the controller.
+4. **Sensor-noise and Monte Carlo validation.** An eight-seed statistical
+   study under realistic velocity-measurement noise, reporting mean and
+   standard deviation rather than a single-run result.
+5. **Industrial-relevance metrics.** Mission-specification compliance and
+   actuator-energy usage are reported alongside RMSE to reflect
+   operationally relevant criteria.
+6. **Dual Simulink validation.** Two independent block-diagram
+   implementations were built and validated, including diagnosis and
+   resolution of an algebraic loop (via an explicit Unit Delay block) and
+   a documented integration-accuracy trade-off between the two models.
 
 ---
 
 ## Results
 
-### Single-run comparison (90s, no sensor noise)
+### Single-Run Comparison (90 s, no sensor noise)
 
-| Method | Tracking RMSE (m) | Disturbance Pred. RMSE |
+| Method | Tracking RMSE (m) | Disturbance Prediction RMSE |
 |---|---|---|
 | NoGP | 0.1969 | N/A |
 | StaticGP | 0.1972 | 0.3671 |
-| DFGP_LP (paper method) | 0.1975 | 0.3581 |
-| **RDFGP_UAMPC (proposed)** | 0.1975 | 0.3584 |
+| DFGP_LP (base paper method) | 0.1975 | 0.3581 |
+| RDFGP_UAMPC (proposed) | 0.1975 | 0.3584 |
 
-**Inference:** in a clean scenario all four methods track almost
-identically — an easy scenario alone does not separate them. The two
-multi-GP methods edge out `StaticGP` slightly on disturbance prediction.
+**Analysis.** Under clean conditions, all four methods track the
+reference to within a comparable margin; a disturbance-free scenario
+does not differentiate the methods substantially. The two multi-GP
+methods show a modest improvement over the single-GP baseline in
+disturbance prediction.
 
-### Base paper vs. this project
+### Base Paper vs. This Project
 
-| Method | Paper (Pred) | Ours | Delta% | Paper (Track) | Ours | Delta% |
+| Method | Paper (Prediction) | Ours | Delta | Paper (Tracking) | Ours | Delta |
 |---|---|---|---|---|---|---|
-| No GP | -- | N/A | -- | 0.1050 | 0.1969 | +87% |
+| No GP | — | N/A | — | 0.1050 | 0.1969 | +87% |
 | DF-GP (LP) | 0.289 | 0.358 | +24% | 0.0285 | 0.1975 | +593% |
 
-**Inference:** our numbers are higher than the paper's, expected because
-our controller's internal model IS the true simulated model — there is
-no hidden real-world mismatch for the learning system to overcome, unlike
-the paper's real hardware test.
+**Analysis.** Reported error values are higher than those in the base
+paper. This is attributable to differences in the evaluation setting: in
+this project, the controller's internal model is identical to the
+simulated plant, so there is no model–reality mismatch of the kind the
+base paper's learning system was designed to overcome in hardware trials.
 
-### Monte Carlo robustness study (8 seeds, sensor noise std = 0.01)
+### Monte Carlo Robustness Study (8 seeds, sensor noise σ = 0.01)
 
-| Method | Pos RMSE mean | Pos RMSE std | Dist RMSE mean | Dist RMSE std |
+| Method | Pos. RMSE (mean) | Pos. RMSE (std) | Dist. RMSE (mean) | Dist. RMSE (std) |
 |---|---|---|---|---|
 | NoGP | 0.1970 | 0.0003 | N/A | N/A |
 | StaticGP | 0.2066 | 0.0028 | 3.1959 | 0.6602 |
 | DFGP_LP | 0.2050 | 0.0030 | 3.4889 | 0.5590 |
-| **RDFGP_UAMPC** | 0.2055 | 0.0024 | 3.6408 | **0.3384** |
+| RDFGP_UAMPC | 0.2055 | 0.0024 | 3.6408 | 0.3384 |
 
-**Inference:** `RDFGP_UAMPC` has the highest average disturbance error of
-the three learning methods, but the **smallest spread** (std 0.34 vs.
-`StaticGP`'s 0.66) — the most consistent, predictable performer across
-randomized noise conditions, even though not the most accurate on
+**Analysis.** RDFGP_UAMPC records the highest mean disturbance-prediction
+error among the learning methods but the lowest standard deviation
+(0.34, compared with 0.66 for StaticGP) — the most consistent method
+across randomized noise conditions, though not the most accurate on
 average.
 
-### Thruster fault-tolerance test (fault at t=45s, yaw actuation → 50%)
+### Thruster Fault-Tolerance Test (fault at t = 45 s, yaw actuation reduced to 50%)
 
-| Method | Before Fault RMSE (m) | After Fault RMSE (m) | Degradation |
+| Method | Before-Fault RMSE (m) | After-Fault RMSE (m) | Degradation |
 |---|---|---|---|
 | NoGP | 0.1950 | 0.2632 | +35.0% |
-| **RDFGP_UAMPC** | 0.1958 | 0.2583 | **+31.9%** |
+| RDFGP_UAMPC | 0.1958 | 0.2583 | +31.9% |
 
-**Inference:** both degrade after the fault (unavoidable — less usable
-thrust exists), but `RDFGP_UAMPC` degrades less, with no new algorithm
-added for this scenario — direct evidence that the disturbance-learning
-pipeline partially absorbs actuator failure.
+**Analysis.** Both methods degrade following the fault, as expected given
+reduced actuator capability. RDFGP_UAMPC degrades to a lesser extent,
+with no algorithmic modification specific to fault handling — evidence
+that the disturbance-learning pipeline provides a degree of inherent
+fault tolerance.
 
-### Industrial readiness metrics (0.30m mission-spec tolerance)
+### Industrial Readiness Metrics (0.30 m mission-specification tolerance)
 
-| Method | Clean-run % in spec | Effort vs. NoGP | Spec % Before Fault | Spec % After Fault |
+| Method | Clean-Run Compliance | Actuator Effort (vs. NoGP) | Compliance Before Fault | Compliance After Fault |
 |---|---|---|---|---|
-| NoGP | 92.9% | 1.00x | 92.9% | 90.7% |
-| StaticGP | 92.9% | 1.01x | -- | -- |
-| DFGP_LP | 92.7% | 1.01x | -- | -- |
-| RDFGP_UAMPC | 92.7% | 1.01x | 92.9% | 90.7% |
+| NoGP | 92.9% | 1.00× | 92.9% | 90.7% |
+| StaticGP | 92.9% | 1.01× | — | — |
+| DFGP_LP | 92.7% | 1.01× | — | — |
+| RDFGP_UAMPC | 92.7% | 1.01× | 92.9% | 90.7% |
 
-**Inference:** clean-run spec compliance is nearly identical across
-methods; the real industrial question is whether compliance holds up
-under fault, which is what an operations team actually judges a system
-on.
+**Analysis.** Compliance under clean conditions is comparable across
+methods; the more operationally relevant question is whether compliance
+is maintained following an actuator fault, which is the basis for
+comparison in the preceding table.
 
 ---
 
 ## System Modelling
 
-- **`auv_full_system.slx`** — physics as one RK4-integrated block, closely matching MATLAB. Feedback loop closed with an explicit `Unit Delay` block (required to reliably break the Controller–Plant algebraic loop).
-- **`auv_full_system_decomposed.slx`** — Coriolis/Damping/Restoring/Kinematics as four separate blocks, matching the paper's diagram; needed a finer time step to stay stable on the yaw axis (`Izz-Nr_dot=0.52`, numerically stiff), so its results diverge somewhat from the RK4 version.
+- **`auv_full_system.slx`** — vehicle physics implemented as a single
+  RK4-integrated block, closely matching the MATLAB simulation. The
+  Controller–Plant feedback loop is closed through an explicit Unit
+  Delay block, required to reliably resolve an algebraic loop identified
+  during development.
+- **`auv_full_system_decomposed.slx`** — Coriolis, Damping, Restoring,
+  and Kinematics implemented as four separate blocks, matching the base
+  paper's diagram. This configuration requires a finer integration step
+  to remain numerically stable on the yaw axis, which has a small
+  effective inertia (`Izz − Nr_dot = 0.52`); as a result, its outputs
+  diverge somewhat from the RK4-based implementation.
 
 ---
-
-## What You Should Be Able to Explain, Unprompted
-
-1. Why a plain MPC fails under disturbance
-2. Why one GP with a fixed forgetting factor isn't enough
-3. Why the paper's weight-blending secretly hard-switches, and how the quadratic term fixes it (with the measured churn numbers)
-4. Why the GP's variance, not just its mean, is useful to the MPC
-5. Why the yaw axis was numerically tricky (RK4 vs Euler)
-6. What a Monte Carlo seed is, and why single-run numbers aren't trustworthy alone
-7. The honest finding: `RDFGP_UAMPC` has the worst average disturbance-prediction accuracy of the learning methods but the smallest spread — most consistent, not most accurate
-8. Why a thruster fault and an environmental disturbance are indistinguishable to the controller, and what that implies for fault tolerance
 
 ## Conclusion
 
 This project reproduces the base paper's learning-based MPC framework,
-proves and fixes a real mathematical weakness in its GP weight-blending
-step, builds the uncertainty-aware control the paper's own authors left
-as future work, and extends the system with demonstrated thruster
-fault tolerance, statistical robustness under sensor noise, and an
-industrial mission-spec framing — all validated across a MATLAB
-simulation and two independent Simulink implementations.
+identifies and corrects a mathematical weakness in its GP weight-blending
+formulation, and implements the uncertainty-aware control extension
+identified but not completed in the original work. The system is further
+evaluated under conditions not addressed in the base paper — actuator
+faults, sensor noise, and statistical robustness across randomized
+trials — and validated across a MATLAB simulation and two independent
+Simulink implementations.
