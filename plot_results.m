@@ -5,46 +5,51 @@ methods = fieldnames(results);
 colors  = lines(numel(methods));
 
 % --- Trajectory tracking -------------------------------------------------
-figure('Name', 'Trajectory Tracking');
-hold on;
+fig1 = figure('Name', 'Trajectory Tracking', 'Color', 'white');
+ax1 = axes(fig1, 'Color', 'white', 'XColor', 'black', 'YColor', 'black', 'FontSize', 10);
+hold(ax1, 'on');
 ref = results.(methods{1}).Xref;
-plot(ref(1, :), ref(2, :), 'k--', 'LineWidth', 1.5);
+plot(ax1, ref(1, :), ref(2, :), '--', 'Color', [0.15 0.15 0.15], 'LineWidth', 1.5);
 legendEntries = {'Reference'};
 for m = 1:numel(methods)
     r = results.(methods{m});
-    plot(r.X(1, :), r.X(2, :), 'Color', colors(m, :), 'LineWidth', 1.2);
+    plot(ax1, r.X(1, :), r.X(2, :), 'Color', colors(m, :), 'LineWidth', 1.2);
     legendEntries{end+1} = methods{m}; %#ok<AGROW>
 end
-xlabel('x [m]'); ylabel('y [m]');
-title('Trajectory Tracking Comparison');
-legend(legendEntries, 'Interpreter', 'none');
-axis equal; grid on; hold off;
+xlabel(ax1, 'x [m]', 'Color', 'black'); ylabel(ax1, 'y [m]', 'Color', 'black');
+title(ax1, 'Trajectory Tracking Comparison', 'Color', 'black');
+legend(ax1, legendEntries, 'Interpreter', 'none', 'TextColor', 'black');
+axis(ax1, 'equal'); grid(ax1, 'on'); box(ax1, 'on'); hold(ax1, 'off');
 
 % --- Position tracking error over time -----------------------------------
-figure('Name', 'Position Tracking Error');
-hold on;
+fig2 = figure('Name', 'Position Tracking Error', 'Color', 'white');
+ax2 = axes(fig2, 'Color', 'white', 'XColor', 'black', 'YColor', 'black', 'FontSize', 10);
+hold(ax2, 'on');
 for m = 1:numel(methods)
     r = results.(methods{m});
-    plot(r.t, r.pos_error, 'Color', colors(m, :), 'LineWidth', 1.2);
+    plot(ax2, r.t, r.pos_error, 'Color', colors(m, :), 'LineWidth', 1.2);
 end
-xlabel('Time [s]'); ylabel('Position error [m]');
-title('Tracking Error Over Time');
-legend(methods, 'Interpreter', 'none'); grid on; hold off;
+xlabel(ax2, 'Time [s]', 'Color', 'black'); ylabel(ax2, 'Position error [m]', 'Color', 'black');
+title(ax2, 'Tracking Error Over Time', 'Color', 'black');
+legend(ax2, methods, 'Interpreter', 'none', 'TextColor', 'black');
+grid(ax2, 'on'); box(ax2, 'on'); hold(ax2, 'off');
 
 % --- Disturbance prediction on the surge axis -----------------------------
-figure('Name', 'Disturbance Estimation (surge axis)');
-hold on;
+fig3 = figure('Name', 'Disturbance Estimation (surge axis)', 'Color', 'white');
+ax3 = axes(fig3, 'Color', 'white', 'XColor', 'black', 'YColor', 'black', 'FontSize', 10);
+hold(ax3, 'on');
 r0 = results.(methods{1});
-plot(r0.t(1:end-1), r0.Dtrue(1, :), 'k', 'LineWidth', 1.5);
+plot(ax3, r0.t(1:end-1), r0.Dtrue(1, :), 'Color', [0.15 0.15 0.15], 'LineWidth', 1.8);
 legendEntries2 = {'Ground truth'};
 for m = 1:numel(methods)
     r = results.(methods{m});
-    plot(r.t(1:end-1), r.Dhat(1, :), 'Color', colors(m, :));
+    plot(ax3, r.t(1:end-1), r.Dhat(1, :), 'Color', colors(m, :));
     legendEntries2{end+1} = methods{m}; %#ok<AGROW>
 end
-xlabel('Time [s]'); ylabel('Disturbance [N]');
-title('Disturbance Prediction - Surge Axis');
-legend(legendEntries2, 'Interpreter', 'none'); grid on; hold off;
+xlabel(ax3, 'Time [s]', 'Color', 'black'); ylabel(ax3, 'Disturbance [N]', 'Color', 'black');
+title(ax3, 'Disturbance Prediction - Surge Axis', 'Color', 'black');
+legend(ax3, legendEntries2, 'Interpreter', 'none', 'TextColor', 'black');
+grid(ax3, 'on'); box(ax3, 'on'); hold(ax3, 'off');
 
 % --- Summary metrics -------------------------------------------------------
 fprintf('\n=== Summary Metrics ===\n');
