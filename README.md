@@ -33,10 +33,7 @@ validation and industrial-relevance studies.
 
 ![System Architecture](docs/system_architecture.png)
 
-Red-bordered stages inside the control loop are the two core algorithmic
-contributions. The parallel MATLAB/Simulink branch and the fault-tolerance
-and Monte Carlo stages correspond to the additional validation work
-described below.
+
 
 ---
 
