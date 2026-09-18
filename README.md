@@ -33,7 +33,10 @@ validation and industrial-relevance studies.
 
 ![System Architecture](docs/system_architecture.png)
 
-
+Red-bordered stages inside the control loop are the two core algorithmic
+contributions. The parallel MATLAB/Simulink branch and the fault-tolerance
+and Monte Carlo stages correspond to the additional validation work
+described below.
 
 ---
 
@@ -71,21 +74,62 @@ validation and industrial-relevance studies.
 | 29 | Fused variance | `Sigma_hat = sum(eta_j·sigma2_j)` | Formula unchanged; usage modified — the base paper computes but never applies this term in the control law |
 | alpha_i | Recency weight | `alpha_i = e^(0.05(N-i))` | Unchanged |
 
+### Summary of Modified Equations
+
+**Equation 13 — Training dataset.** The base paper splits training data
+into a static set (collected during the first 10 seconds, representing
+nominal model error) and a sliding set (continuously updated, capturing
+new disturbances). This project uses a single sliding buffer only. Effect:
+the model no longer separately tracks baseline modeling error versus
+newly arriving disturbance, simplifying the implementation at the cost
+of that distinction.
+
+**Equation 17 — Hyperparameter fitting.** The base paper optimizes GP
+hyperparameters by minimizing the negative log-likelihood through
+conjugate gradient descent, an iterative numerical procedure. This
+project instead computes hyperparameters directly from the data (length
+scale from the median pairwise distance, signal variance from the
+empirical variance). Effect: substantially faster to recompute at every
+buffer update, at the cost of a formal optimality guarantee.
+
+**Equations 18–23 — GP formulation.** The base paper implements a sparse
+GP using inducing points and applies forgetting through a precision
+matrix (B_lambda), designed for computational efficiency at scale. This
+project uses a dense weighted-kernel-ridge formulation, applying the
+forgetting factor directly as a per-sample weight. Effect: a simpler
+implementation with the same underlying intent — recent observations are
+trusted more than older ones — without the inducing-point machinery.
+
+**Equation 24 — GP input feature.** The base paper's GP input includes a
+full history window of past disturbance, state, and control values. This
+project uses only the current body-frame velocity and yaw rate as the
+input feature. Effect: prediction is based on the present operating
+condition rather than recent trajectory history, reducing input
+dimensionality and computational cost.
+
+**Equation 26a — Weight objective.** The base paper's weight objective is
+linear in the blending weights, so its optimum is always located at a
+vertex of the probability simplex — the resulting "blend" is in fact a
+hard switch between GP models. This project adds a quadratic
+regularization term, producing a genuine blend. Measured effect: mean
+weight churn decreases from 0.049 per step (linear program) to 0.045 per
+step (regularized quadratic program).
+
+**Equation 29 — Usage of the fused variance.** The formula for the fused
+predictive variance is unchanged from the base paper, but its use is
+modified: the base paper computes this value and does not apply it
+further, noting this as future work. This project uses it to tighten the
+MPC's actuator bounds when the disturbance estimate is unreliable.
+
 ---
 
 ## Contributions
 
-1. **Regularized dynamic weight blending.** The base paper's weight
-   objective (Eq. 26a) is linear in the weights, so the optimum is always
-   located at a vertex of the probability simplex — the resulting "blend"
-   is in fact a hard switch between GP models. Introducing a quadratic
-   regularization term produces a genuine blend. Measured effect: mean
-   weight churn decreases from 0.049 per step (linear program) to 0.045
-   per step (regularized quadratic program).
-2. **Uncertainty-aware MPC.** The base paper computes the fused GP
-   variance (Eq. 29) but does not apply it in the control law, noting
-   this as future work. This project uses the variance to tighten
-   actuator bounds when the disturbance estimate is unreliable.
+1. **Regularized dynamic weight blending.** Detailed under Equation 26a
+   above. Measured effect: mean weight churn decreases from 0.049 per
+   step (linear program) to 0.045 per step (regularized quadratic
+   program).
+2. **Uncertainty-aware MPC.** Detailed under Equation 29 above.
 3. **Thruster fault-tolerance evaluation.** A mid-mission actuator fault
    (yaw-thruster efficiency reduced to 50% at t = 45s) is partially
    absorbed by the existing disturbance-learning pipeline without any
