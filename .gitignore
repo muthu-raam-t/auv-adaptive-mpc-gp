@@ -15,3 +15,4 @@ results/*.mat
 .DS_Store
 Thumbs.db
 matlab.mat
+venv/
