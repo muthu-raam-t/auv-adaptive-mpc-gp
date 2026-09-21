@@ -58,7 +58,7 @@ X_log(:, 1) = x;
 for k = 1:N-1
     t = t_vec(k);
 
-    d_true = disturbance_profile(t);
+    d_true = real_disturbance_profile(t, p);
     Dtrue_log(:, k) = d_true;
 
     if useGP
