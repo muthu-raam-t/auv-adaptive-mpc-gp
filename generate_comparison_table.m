@@ -1,6 +1,6 @@
 function generate_comparison_table(results)
 %GENERATE_COMPARISON_TABLE Prints a comparison table of prediction and
-%   tracking error across all four controller variants, alongside the
+%   tracking error across all controller variants, alongside the
 %   base paper's published numbers where a direct match exists.
 %
 %   Usage:
@@ -28,6 +28,12 @@ fprintf('    prediction RMSE = %.4f,  tracking RMSE = %.4f m\n', ...
 fprintf('\nSingle fixed-forgetting-factor GP-MPC baseline:\n');
 fprintf('    prediction RMSE = %.4f,  tracking RMSE = %.4f m\n', ...
     results.StaticGP.dist_pred_error, results.StaticGP.rmse_pos);
+
+if isfield(results, 'PID')
+    fprintf('\nIndustry-standard independent PID baseline (no learning, no prediction):\n');
+    fprintf('    tracking RMSE = %.4f m  (no disturbance-prediction metric - PID has no estimator)\n', ...
+        results.PID.rmse_pos);
+end
 
 end
 
