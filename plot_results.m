@@ -35,6 +35,8 @@ legend(ax2, methods, 'Interpreter', 'none', 'TextColor', 'black');
 grid(ax2, 'on'); box(ax2, 'on'); hold(ax2, 'off');
 
 % --- Disturbance prediction on the surge axis -----------------------------
+% Methods with no disturbance estimator at all (e.g. PID) are skipped here
+% - an all-NaN line would just clutter the legend with nothing to show.
 fig3 = figure('Name', 'Disturbance Estimation (surge axis)', 'Color', 'white');
 ax3 = axes(fig3, 'Color', 'white', 'XColor', 'black', 'YColor', 'black', 'FontSize', 10);
 hold(ax3, 'on');
@@ -43,6 +45,9 @@ plot(ax3, r0.t(1:end-1), r0.Dtrue(1, :), 'Color', [0.15 0.15 0.15], 'LineWidth',
 legendEntries2 = {'Ground truth'};
 for m = 1:numel(methods)
     r = results.(methods{m});
+    if all(isnan(r.Dhat(1, :)))
+        continue;   % no estimator for this method (e.g. PID) - nothing to plot
+    end
     plot(ax3, r.t(1:end-1), r.Dhat(1, :), 'Color', colors(m, :));
     legendEntries2{end+1} = methods{m}; %#ok<AGROW>
 end
