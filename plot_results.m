@@ -18,7 +18,7 @@ for m = 1:numel(methods)
 end
 xlabel(ax1, 'x [m]', 'Color', 'black'); ylabel(ax1, 'y [m]', 'Color', 'black');
 title(ax1, 'Trajectory Tracking Comparison', 'Color', 'black');
-legend(ax1, legendEntries, 'Interpreter', 'none', 'TextColor', 'black');
+legend(ax1, legendEntries, 'Interpreter', 'none', 'TextColor', 'black', 'Color', 'white', 'EdgeColor', 'black');
 axis(ax1, 'equal'); grid(ax1, 'on'); box(ax1, 'on'); hold(ax1, 'off');
 
 % --- Position tracking error over time -----------------------------------
@@ -31,7 +31,7 @@ for m = 1:numel(methods)
 end
 xlabel(ax2, 'Time [s]', 'Color', 'black'); ylabel(ax2, 'Position error [m]', 'Color', 'black');
 title(ax2, 'Tracking Error Over Time', 'Color', 'black');
-legend(ax2, methods, 'Interpreter', 'none', 'TextColor', 'black');
+legend(ax2, methods, 'Interpreter', 'none', 'TextColor', 'black', 'Color', 'white', 'EdgeColor', 'black');
 grid(ax2, 'on'); box(ax2, 'on'); hold(ax2, 'off');
 
 % --- Disturbance prediction on the surge axis -----------------------------
@@ -53,7 +53,7 @@ for m = 1:numel(methods)
 end
 xlabel(ax3, 'Time [s]', 'Color', 'black'); ylabel(ax3, 'Disturbance [N]', 'Color', 'black');
 title(ax3, 'Disturbance Prediction - Surge Axis', 'Color', 'black');
-legend(ax3, legendEntries2, 'Interpreter', 'none', 'TextColor', 'black');
+legend(ax3, legendEntries2, 'Interpreter', 'none', 'TextColor', 'black', 'Color', 'white', 'EdgeColor', 'black');
 grid(ax3, 'on'); box(ax3, 'on'); hold(ax3, 'off');
 
 % --- Summary metrics -------------------------------------------------------
