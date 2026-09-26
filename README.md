@@ -71,6 +71,23 @@ validation and industrial-relevance studies.
 | 29 | Fused variance | `Sigma_hat = sum(eta_j·sigma2_j)` | Formula unchanged; usage modified — the base paper computes but never applies this term in the control law |
 | alpha_i | Recency weight | `alpha_i = e^(0.05(N-i))` | Unchanged |
 
+
+
+### Data Flow Between Equations
+
+![Equation-Level Data Flow](docs/equation_flowchart.png)
+
+Every equation's output is the next equation's required input — a closed
+loop, not an independent list. Kinematics and dynamics (Eq. 1–8) feed
+Eq. 9, which RK4 (Eq. 12b) steps forward into a new state. That state
+feeds a residual calculation (no equation number — this project's own
+addition) producing the GP's training target (Eq. 25). The GP bank
+(Eq. 16, 22, 18–21) produces three predictions, blended by the modified
+weight equation (Eq. 26a) into a fused estimate and confidence
+(Eq. 28–29), which corrects the MPC (Eq. 12a–c). The resulting control
+action feeds back into Eq. 4–8, closing the loop every 0.2 seconds.
+
+
 ### Summary of Modified Equations
 
 **Equation 13 — Training dataset.** The base paper splits training data
