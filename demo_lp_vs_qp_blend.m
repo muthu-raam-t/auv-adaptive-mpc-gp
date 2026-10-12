@@ -14,7 +14,7 @@ H = 25; Nwin = 20; dimA = 4;
 rhos   = [0, 0.05];
 labels = {'LP (\rho=0, printed formulation)', 'QP (\rho=0.05, proposed)'};
 
-figure('Name', 'LP vs QP blend weights');
+fig = figure('Name', 'LP vs QP blend weights', 'Color', 'white', 'Position', [100 100 1000 420]);
 
 for r = 1:numel(rhos)
     rho = rhos(r);
@@ -77,5 +77,7 @@ for r = 1:numel(rhos)
     churn = mean(sum(abs(diff(etaHist, 1, 1)), 2));
     fprintf('%s: mean |delta eta| per step = %.4f\n', labels{r}, churn);
 end
+
+force_white_figure(fig);   % white background, black axes/text/legend
 
 end
