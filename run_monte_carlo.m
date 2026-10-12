@@ -47,25 +47,9 @@ for m = 1:numel(methods)
         mean(rmse_dist_all(:,m), 'omitnan'), std(rmse_dist_all(:,m), 'omitnan'));
 end
 
-% ---- Plot: mean +/- std error bars across methods --------------------------
-figure('Name', 'Monte Carlo Robustness Study', 'Color', 'w');
-
-subplot(1,2,1);
-bar(mean(rmse_pos_all,1)); hold on;
-errorbar(1:numel(methods), mean(rmse_pos_all,1), std(rmse_pos_all,1), 'k.', 'LineWidth', 1.2);
-set(gca, 'XTickLabel', methods); xtickangle(30);
-ylabel('Tracking RMSE [m]');
-title(sprintf('Position Tracking (mean \\pm std, %d seeds)', n_seeds));
-grid on;
-
-subplot(1,2,2);
-bar(mean(rmse_dist_all,1,'omitnan')); hold on;
-errorbar(1:numel(methods), mean(rmse_dist_all,1,'omitnan'), std(rmse_dist_all,1,'omitnan'), 'k.', 'LineWidth', 1.2);
-set(gca, 'XTickLabel', methods); xtickangle(30);
-ylabel('Disturbance Prediction RMSE');
-title(sprintf('Disturbance Prediction (mean \\pm std, %d seeds)', n_seeds));
-grid on;
-
+% ---- Plot: mean +/- std error bars across methods (white background) -------
+% The results struct is built first so the same plotting function can redraw
+% this figure later from results/monte_carlo_results.mat without re-running.
 results_mc.methods       = methods;
 results_mc.rmse_pos_all  = rmse_pos_all;
 results_mc.rmse_dist_all = rmse_dist_all;
@@ -75,5 +59,7 @@ results_mc.n_seeds       = n_seeds;
 if ~exist('results', 'dir'); mkdir('results'); end
 save('results/monte_carlo_results.mat', 'results_mc');
 fprintf('\nSaved results/monte_carlo_results.mat\n');
+
+plot_monte_carlo_results(results_mc);
 
 end
