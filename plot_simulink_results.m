@@ -40,7 +40,7 @@ Dhat  = squeeze(Dhat);
 pos_error = sqrt(sum((X(1:2, :) - Xref(1:2, :)).^2, 1));
 
 % ---- Figure 1: trajectory, paper-style (dashed reference + start marker) --
-figure('Name', 'Simulink Trajectory Tracking', 'Color', 'w');
+f1 = figure('Name', 'Simulink Trajectory Tracking', 'Color', 'white');
 plot(Xref(1,:), Xref(2,:), 'k--', 'LineWidth', 1.5); hold on;
 plot(X(1,:), X(2,:), 'Color', [0.6 0 0.2], 'LineWidth', 1.6);
 plot(X(1,1), X(2,1), 'bx', 'MarkerSize', 12, 'LineWidth', 2.5);
@@ -49,23 +49,26 @@ xlabel('X [m]'); ylabel('Y [m]');
 title('Obtained Trajectory - RDF-GP + UA-MPC (Simulink)', 'FontWeight', 'bold');
 legend('Reference', 'RDF-GP + UA-MPC', 'Location', 'best');
 axis equal; grid on; box on;
+force_white_figure(f1);
 
 % ---- Figure 2: |Error| over time, paper-style ------------------------------
-figure('Name', 'Simulink Position Error', 'Color', 'w');
+f2 = figure('Name', 'Simulink Position Error', 'Color', 'white');
 plot(t, pos_error, 'Color', [0.6 0 0.2], 'LineWidth', 1.6);
 xlabel('Time [s]'); ylabel('|Error| [m]');
 title('Trajectory Tracking Error (Simulink)', 'FontWeight', 'bold');
 legend(sprintf('RDF-GP + UA-MPC (mean: %.4f)', mean(pos_error)), 'Location', 'best');
 grid on; box on;
+force_white_figure(f2);
 
 % ---- Figure 3: disturbance prediction, paper-style -------------------------
-figure('Name', 'Simulink Disturbance Estimation (surge axis)', 'Color', 'w');
+f3 = figure('Name', 'Simulink Disturbance Estimation (surge axis)', 'Color', 'white');
 plot(t, Dtrue(1,:), 'k', 'LineWidth', 1.8); hold on;
 plot(t, Dhat(1,:), 'Color', [0.6 0 0.2], 'LineWidth', 1.4);
 xlabel('Time [s]'); ylabel('Disturbance [N]');
 title('GP Disturbance Prediction - Surge Axis (Simulink)', 'FontWeight', 'bold');
 legend('Ground Truth', 'RDF-GP + UA-MPC', 'Location', 'best');
 grid on; box on;
+force_white_figure(f3);
 
 fprintf('\n=== Simulink Run Summary ===\n');
 fprintf('RMSE position error  : %.4f m\n', sqrt(mean(pos_error.^2)));

@@ -36,26 +36,29 @@ Dhat  = Dhat(:, idx);
 
 pos_error = sqrt(sum((X(1:2, :) - Xref(1:2, :)).^2, 1));
 
-figure('Name', 'Simulink (Decomposed) Trajectory Tracking', 'Color', 'w');
+f1 = figure('Name', 'Simulink (Decomposed) Trajectory Tracking', 'Color', 'white');
 plot(Xref(1,:), Xref(2,:), 'k--', 'LineWidth', 1.5); hold on;
 plot(X(1,:), X(2,:), 'Color', [0 0.3 0.6], 'LineWidth', 1.6);
 plot(X(1,1), X(2,1), 'bx', 'MarkerSize', 12, 'LineWidth', 2.5);
 xlabel('X [m]'); ylabel('Y [m]');
 title('Obtained Trajectory - Block-Decomposed Plant (Simulink)', 'FontWeight', 'bold');
 legend('Reference', 'RDF-GP + UA-MPC'); axis equal; grid on; box on;
+force_white_figure(f1);
 
-figure('Name', 'Simulink (Decomposed) Position Error', 'Color', 'w');
+f2 = figure('Name', 'Simulink (Decomposed) Position Error', 'Color', 'white');
 plot(t, pos_error, 'Color', [0 0.3 0.6], 'LineWidth', 1.6);
 xlabel('Time [s]'); ylabel('|Error| [m]');
 title('Trajectory Tracking Error - Block-Decomposed Plant (Simulink)', 'FontWeight', 'bold');
 grid on; box on;
+force_white_figure(f2);
 
-figure('Name', 'Simulink (Decomposed) Disturbance Estimation', 'Color', 'w');
+f3 = figure('Name', 'Simulink (Decomposed) Disturbance Estimation', 'Color', 'white');
 plot(t, Dtrue(1,:), 'k', 'LineWidth', 1.8); hold on;
 plot(t, Dhat(1,:), 'Color', [0 0.3 0.6], 'LineWidth', 1.4);
 xlabel('Time [s]'); ylabel('Disturbance [N]');
 title('Disturbance Prediction - Block-Decomposed Plant (Simulink)', 'FontWeight', 'bold');
 legend('Ground Truth', 'RDF-GP + UA-MPC'); grid on; box on;
+force_white_figure(f3);
 
 fprintf('\n=== Decomposed-Plant Simulink Run Summary ===\n');
 fprintf('RMSE position error  : %.4f m\n', sqrt(mean(pos_error.^2)));

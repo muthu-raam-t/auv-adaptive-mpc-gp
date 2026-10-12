@@ -29,7 +29,7 @@ fprintf('\n=== After fault (t >= %d s) ===\n', fault_time);
 fprintf('  NoGP          RMSE: %.4f m\n', sqrt(mean(out_nogp.pos_error(after_idx).^2)));
 fprintf('  RDFGP_UAMPC   RMSE: %.4f m\n', sqrt(mean(out_proposed.pos_error(after_idx).^2)));
 
-figure('Name', 'Fault Tolerance - Trajectory', 'Color', 'w');
+fig1 = figure('Name', 'Fault Tolerance - Trajectory', 'Color', 'white');
 plot(out_nogp.Xref(1,:), out_nogp.Xref(2,:), 'k--', 'LineWidth', 1.3); hold on;
 plot(out_nogp.X(1,:), out_nogp.X(2,:), 'r', 'LineWidth', 1.4);
 plot(out_proposed.X(1,:), out_proposed.X(2,:), 'b', 'LineWidth', 1.4);
@@ -37,8 +37,9 @@ legend('Reference', 'No GP', 'RDF-GP + UA-MPC');
 xlabel('X [m]'); ylabel('Y [m]');
 title('Trajectory Under Mid-Mission Thruster Fault');
 axis equal; grid on;
+force_white_figure(fig1);
 
-figure('Name', 'Fault Tolerance - Tracking Error', 'Color', 'w');
+fig2 = figure('Name', 'Fault Tolerance - Tracking Error', 'Color', 'white');
 plot(out_nogp.t, out_nogp.pos_error, 'r', 'LineWidth', 1.3); hold on;
 plot(out_proposed.t, out_proposed.pos_error, 'b', 'LineWidth', 1.3);
 xline(fault_time, 'k--', 'Fault onset', 'LineWidth', 1.5);
@@ -46,5 +47,6 @@ legend('No GP', 'RDF-GP + UA-MPC');
 xlabel('Time [s]'); ylabel('Position error [m]');
 title('Tracking Error Before / After Actuator Fault');
 grid on;
+force_white_figure(fig2);
 
 end
