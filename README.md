@@ -159,6 +159,11 @@ MPC's actuator bounds when the disturbance estimate is unreliable.
    implementations were built and validated, including diagnosis and
    resolution of an algebraic loop (via an explicit Unit Delay block) and
    a documented integration-accuracy trade-off between the two models.
+7. **PID benchmark.** A per-axis PID controller, run on the same
+   trajectory and actuator clamps as the MPC-based methods, is included
+   as the real-world baseline. Its tracking RMSE (0.2447 m) is compared
+   with 0.1995–0.2126 m for the MPC-based methods. The PID gains were
+   tuned by hand, so a better-tuned PID could narrow the gap.
 
 ---
 
@@ -168,29 +173,51 @@ MPC's actuator bounds when the disturbance estimate is unreliable.
 
 | Method | Tracking RMSE (m) | Disturbance Prediction RMSE |
 |---|---|---|
-| NoGP | 0.1969 | N/A |
-| StaticGP | 0.1972 | 0.3671 |
-| DFGP_LP (base paper method) | 0.1975 | 0.3581 |
-| RDFGP_UAMPC (proposed) | 0.1975 | 0.3584 |
+| NoGP | 0.2126 | N/A |
+| StaticGP | 0.1995 | 0.5597 |
+| DFGP_LP (base paper method) | 0.1999 | 0.6157 |
+| RDFGP_UAMPC (proposed) | 0.1999 | 0.5987 |
+| PID (real-world baseline) | 0.2447 | N/A |
 
-**Analysis.** Under clean conditions, all four methods track the
-reference to within a comparable margin; a disturbance-free scenario
-does not differentiate the methods substantially. The two multi-GP
-methods show a modest improvement over the single-GP baseline in
-disturbance prediction.
+**Analysis.** PID has the highest tracking error (0.2447 m), above every
+MPC-based method (0.1995–0.2126 m); even NoGP, which has no learning,
+beats it. Among the learning methods, tracking is nearly identical
+(0.1995–0.1999 m), and StaticGP is marginally best in this single run on
+both tracking and disturbance prediction. The proposed RDFGP_UAMPC
+improves on the base-paper DFGP_LP in disturbance prediction (0.5987
+versus 0.6157); its advantage across varying conditions appears in the
+Monte Carlo study below, not in this single run. PID and NoGP have no
+disturbance estimator, so they have no disturbance-prediction score.
+
+### PID vs. Learning-Based MPC
+
+| Property | PID | Our MPC |
+|---|---|---|
+| Control | Reactive | Predictive |
+| Model | None | 4-DOF inside optimiser |
+| Disturbance | Ignored | Learned online |
+| Limits | Clamped afterwards | Built into optimisation |
+| Axis coupling | Ignored | Modelled |
+| Tracking RMSE | 0.2447 m | 0.1995–0.2126 m |
+
+**Analysis.** Each design difference shows up as better tracking. NoGP
+alone beats PID, so predictive optimisation with native constraints helps
+even without learning. Caveat: the PID gains were hand-tuned.
 
 ### Base Paper vs. This Project
 
 | Method | Paper (Prediction) | Ours | Delta | Paper (Tracking) | Ours | Delta |
 |---|---|---|---|---|---|---|
-| No GP | — | N/A | — | 0.1050 | 0.1969 | +87% |
-| DF-GP (LP) | 0.289 | 0.358 | +24% | 0.0285 | 0.1975 | +593% |
+| No GP | — | N/A | — | 0.1050 | 0.2126 | +102% |
+| DF-GP (LP) | 0.289 | 0.616 | +113% | 0.0285 | 0.1999 | +601% |
 
 **Analysis.** Reported error values are higher than those in the base
 paper. This is attributable to differences in the evaluation setting: in
 this project, the controller's internal model is identical to the
 simulated plant, so there is no model–reality mismatch of the kind the
 base paper's learning system was designed to overcome in hardware trials.
+The plant was not tuned to match the published numbers; the fair
+comparison is the five-method test above.
 
 ### Monte Carlo Robustness Study (8 seeds, sensor noise σ = 0.01)
 
@@ -215,10 +242,26 @@ average.
 | RDFGP_UAMPC | 0.1958 | 0.2583 | +31.9% |
 
 **Analysis.** Both methods degrade following the fault, as expected given
-reduced actuator capability. RDFGP_UAMPC degrades to a lesser extent,
-with no algorithmic modification specific to fault handling — evidence
-that the disturbance-learning pipeline provides a degree of inherent
-fault tolerance.
+reduced actuator capability. RDFGP_UAMPC degrades to a lesser extent
+(3.1 percentage points less), with no algorithmic modification specific
+to fault handling — evidence that the disturbance-learning pipeline
+provides a degree of inherent fault tolerance.
+
+### Fusion Behaviour: Linear Program vs. Regularized QP
+
+| Property | LP (paper) | QP (ours) |
+|---|---|---|
+| Cost | Linear | Quadratic (ρ = 0.05) |
+| Optimum | Corner | Can be inside |
+| Behaviour | Hard switch | True blend |
+| Mean weight churn per step | 0.049 | 0.045 |
+
+**Analysis.** Churn is the average change in the blend weights from one
+step to the next; lower means a steadier disturbance estimate reaches the
+MPC. A linear cost over the weight simplex cannot produce a blend, so the
+LP behaves as a hard switch by construction, not through tuning. The
+measured churn reduction is small (about 8%), so the blend-weight plot is
+the main evidence and the churn figure is supporting.
 
 ### Industrial Readiness Metrics (0.30 m mission-specification tolerance)
 
