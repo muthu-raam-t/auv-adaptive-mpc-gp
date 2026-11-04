@@ -29,7 +29,13 @@ validation and industrial-relevance studies.
 
 ## System Architecture
 
+![System Architecture Diagram](docs/system_architecture.png)
+
+
 ## Equation-Level Comparison with the Base Paper
+
+![Equation Flowchart](docs/equation_flowchart.png)
+
 
 | Eq. | Description | Formula | Status | 
 | ----- | ----- | ----- | ----- | 
