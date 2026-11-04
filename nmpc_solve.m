@@ -64,6 +64,9 @@ for k = 1:Nc
     uk = U(k, :)';
     xref_k = xref_seq(:, min(k, size(xref_seq, 2)));
     e = x - xref_k;
+    % Wrap heading error to [-pi, pi] so +/-pi atan2 branch-cut crossings
+    % at the figure-eight bends do not cause a false 2*pi (360-deg) spin loop
+    e(7) = atan2(sin(e(7)), cos(e(7)));
     if k < Nc
         J = J + e'*p.Q*e + uk'*p.R*uk;
     else
